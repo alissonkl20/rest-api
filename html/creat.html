@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criação de Produto | Dashboard Neon</title>
+    <link rel="stylesheet" href="./css/creat.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <style>
+        
+    </style>
+</head>
+<body>
+    <div class="glow-container animate__animated animate__fadeIn">
+        <div class="container">
+            <div class="header">
+                <h1 id="formTitle">Cadastro de Produto</h1>
+            </div>
+            
+            <div class="form-container">
+                <form id="productForm">
+                    <div class="form-group">
+                        <label for="id">ID:</label>
+                        <input type="number" id="id" name="id" class="form-control" placeholder=" " readonly>
+                        <span class="floating-label">ID (automático)</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nome">Nome do Produto:</label>
+                        <input type="text" id="nome" name="nome" class="form-control" required placeholder=" ">
+                        <span class="floating-label">Obrigatório</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="preco">Preço (R$):</label>
+                        <input type="number" id="preco" name="preco" class="form-control" step="0.01" min="0" required placeholder=" ">
+                        <span class="floating-label">Obrigatório</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Disponibilidade:</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="disponivel" name="disponivel" checked>
+                            <label for="disponivel">Produto disponível para venda</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="categoria">Categoria:</label>
+                        <input type="text" id="categoria" name="categoria" class="form-control" placeholder=" ">
+                        <span class="floating-label">Opcional</span>
+                    </div>
+                    
+                    <button type="button" class="btn" onclick="handleSubmit()" id="submitBtn">
+                        <span id="buttonText">Cadastrar Produto</span>
+                    </button>
+
+                    <!-- Adicione este botão abaixo do botão "Cadastrar Produto" -->
+                    <button type="button" class="btn" onclick="updateProductByName()" id="updateByNameBtn" style="margin-top:10px;">
+                        <span>Atualizar por Nome</span>
+                    </button>
+                </form>                <!-- ...existing code... -->
+                <button type="button" class="btn" onclick="deleteProductByName()" id="deleteByNameBtn" style="margin-top:10px; background: linear-gradient(45deg, #ff006a, #9d00ff);">
+                    <span>Deletar por Nome</span>
+                </button>
+                <!-- ...existing code... -->
+                
+                <div id="message" class="message"></div>
+                
+                <div class="output-container" hidden>
+                    <h2>Dados Enviados:</h2>
+                    <div id="jsonOutput">Preencha o formulário para visualizar os dados que serão enviados</div>
+                </div>
+
+                <div class="output-container">
+                    <h2>Produtos Cadastrados:</h2>
+                    <ul id="productNamesList">
+                        <li>Carregando...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Verifica se há um ID na URL para carregar os dados do produto
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('id');
+            
+            if (productId) {
+                loadProduct(productId);
+            }
+
+            // Carrega a lista de produtos cadastrados
+            loadProductNames();
+        });
+
+        // Efeito ripple nos botões
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('click', function(e) {
+                const x = e.clientX - e.target.getBoundingClientRect().left;
+                const y = e.clientY - e.target.getBoundingClientRect().top;
+                
+                const ripple = document.createElement('span');
+                ripple.classList.add('ripple-effect');
+                ripple.style.left = `${x}px`;
+                ripple.style.top = `${y}px`;
+                
+                this.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            });
+        });
+
+        // Carrega um produto existente para edição
+        async function loadProduct(productId) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/produtos/${productId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ao carregar produto: ${response.status}`);
+                }
+                
+                const product = await response.json();
+                
+                // Preenche o formulário com os dados do produto
+                document.getElementById('id').value = product.id;
+                document.getElementById('nome').value = product.nome;
+                document.getElementById('preco').value = product.preco;
+                document.getElementById('disponivel').checked = product.disponivel;
+                document.getElementById('categoria').value = product.categoria?.id || '';
+                
+                // Atualiza a interface para modo de edição
+                document.getElementById('formTitle').textContent = 'Edição de Produto';
+                document.getElementById('buttonText').textContent = 'Atualizar Produto';
+                document.getElementById('id').readOnly = true;
+                
+                // Mostra os dados no JSON de saída
+                document.getElementById('jsonOutput').textContent = JSON.stringify(product, null, 2);
+                
+            } catch (error) {
+                showMessage(`✖ Erro ao carregar produto: ${error.message}`, false);
+                console.error('Erro detalhado:', error);
+            }
+        }
+
+        /**
+         * Busca todos os produtos e exibe os nomes na lista.
+         */
+        async function loadProductNames() {
+            const list = document.getElementById('productNamesList');
+            list.innerHTML = '<li>Carregando...</li>';
+            try {
+                const response = await fetch('http://localhost:8080/api/produtos');
+                if (!response.ok) throw new Error('Erro ao buscar produtos');
+                const produtos = await response.json();
+                if (produtos.length === 0) {
+                    list.innerHTML = '<li>Nenhum produto cadastrado.</li>';
+                } else {
+                    // Agrupa produtos por categoria
+                    const categorias = {};
+                    produtos.forEach(prod => {
+                        const cat = prod.categoria && prod.categoria.nome ? prod.categoria.nome : 'Sem Categoria';
+                        if (!categorias[cat]) categorias[cat] = [];
+                        categorias[cat].push(prod.nome);
+                    });
+
+                    // Monta a lista agrupada
+                    list.innerHTML = '';
+                    const categoriasVerdes = ['Paes', 'Doces', 'Salgados', 'Bolos e Tortas'];
+                    Object.keys(categorias).forEach(cat => {
+                        const catLi = document.createElement('li');
+                        if (categoriasVerdes.includes(cat)) {
+                            catLi.innerHTML = `<strong class="categoria-verde">${cat}</strong>`;
+                        } else {
+                            catLi.innerHTML = `<strong>${cat}</strong>`;
+                        }
+                        const ul = document.createElement('ul');
+                        categorias[cat].forEach(nome => {
+                            const prodLi = document.createElement('li');
+                            prodLi.textContent = nome;
+                            ul.appendChild(prodLi);
+                        });
+                        catLi.appendChild(ul);
+                        list.appendChild(catLi);
+                    });
+                }
+            } catch (e) {
+                list.innerHTML = '<li>Erro ao carregar produtos.</li>';
+            }
+        }
+
+        function showMessage(text, isSuccess) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = isSuccess ? 'message success' : 'message error';
+            messageDiv.style.display = 'block';
+            
+            // Adiciona animação
+            messageDiv.classList.add('animate__animated', 'animate__fadeIn');
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Decide se é POST (criação) ou PUT (atualização)
+        function handleSubmit() {
+            const productId = document.getElementById('id').value;
+            if (productId) {
+                updateProduct(productId);
+            } else {
+                submitForm();
+            }
+        }
+        
+        // Cria um novo produto (POST)
+        async function submitForm() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Enviando... ✨</span>';
+            
+            try {
+                // Coletar dados do formulário
+                const product = {
+                    nome: document.getElementById('nome').value.trim(),
+                    preco: parseFloat(document.getElementById('preco').value),
+                    disponivel: document.getElementById('disponivel').checked,
+                    categoria: {
+                        id: document.getElementById('categoria').value.trim() ? 
+                            parseInt(document.getElementById('categoria').value.trim()) : null
+                    }
+                };
+
+                // Validações
+                if (!product.nome || product.nome.length < 2) {
+                    throw new Error('Nome do produto deve ter pelo menos 2 caracteres');
+                }
+                
+                if (isNaN(product.preco) || product.preco <= 0) {
+                    throw new Error('Preço deve ser um número positivo');
+                }
+
+                document.getElementById('jsonOutput').textContent = JSON.stringify(product, null, 2);
+                
+                const response = await fetch('http://localhost:8080/api/produtos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(product)
+                });
+                
+                if (!response.ok) {
+                    let errorMessage = `Erro HTTP: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage += ` - ${errorData.message || JSON.stringify(errorData)}`;
+                    } catch (e) {
+                        errorMessage += ` - ${await response.text()}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const data = await response.json();
+                showMessage('✔ Produto cadastrado com sucesso! ID: ' + (data.id || 'Novo'), true);
+                console.log('Resposta da API:', data);
+                // atualizarListaProdutos(); // <-- Remova esta linha
+
+                // Limpa o formulário após sucesso
+                document.getElementById('productForm').reset();
+                
+                // Efeito visual de confirmação
+                document.querySelector('.glow-container').style.animation = 'glow 0.5s 3 alternate';
+                
+                // Atualiza a lista de produtos cadastrados
+                loadProductNames();
+                
+            } catch (error) {
+                showMessage(`✖ Falha ao cadastrar: ${error.message}`, false);
+                console.error('Erro detalhado:', error);
+                
+                // Efeito visual de erro
+                const glow = document.querySelector('.glow-container');
+                glow.style.boxShadow = '0 0 20px rgba(255, 0, 106, 0.7)';
+                setTimeout(() => {
+                    glow.style.boxShadow = '';
+                }, 1000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Cadastrar Produto</span>';
+            }
+        }
+        
+        /**
+         * Atualiza um produto via PUT na API.
+         * @param {number|string} productId - ID do produto a ser atualizado.
+         * @param {object} product - Dados do produto.
+         * @returns {Promise<object>} - Resposta da API.
+         */
+        async function putProduto(productId, product) {
+            const response = await fetch(`http://localhost:8080/api/produtos/${productId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(product)
+            });
+
+            if (!response.ok) {
+                let errorMessage = `Erro HTTP: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage += ` - ${errorData.message || JSON.stringify(errorData)}`;
+                } catch (e) {
+                    errorMessage += ` - ${await response.text()}`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            return await response.json();
+        }
+
+        // Atualiza um produto existente (PUT)
+        async function updateProduct(productId) {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Atualizando... 🔄</span>';
+            
+            try {
+                // Coletar dados do formulário
+                const product = {
+                    nome: document.getElementById('nome').value.trim(),
+                    preco: parseFloat(document.getElementById('preco').value),
+                    disponivel: document.getElementById('disponivel').checked,
+                    categoria: {
+                        id: document.getElementById('categoria').value.trim() ? 
+                            parseInt(document.getElementById('categoria').value.trim()) : null
+                    }
+                };
+
+                // Validações
+                if (!product.nome || product.nome.length < 2) {
+                    throw new Error('Nome do produto deve ter pelo menos 2 caracteres');
+                }
+                
+                if (isNaN(product.preco) || product.preco <= 0) {
+                    throw new Error('Preço deve ser um número positivo');
+                }
+
+                document.getElementById('jsonOutput').textContent = JSON.stringify(product, null, 2);
+                
+                const response = await fetch(`http://localhost:8080/api/produtos/${productId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(product)
+                });
+                
+                if (!response.ok) {
+                    let errorMessage = `Erro HTTP: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage += ` - ${errorData.message || JSON.stringify(errorData)}`;
+                    } catch (e) {
+                        errorMessage += ` - ${await response.text()}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const data = await response.json();
+                showMessage('✔ Produto atualizado com sucesso!', true);
+                console.log('Resposta da API:', data);
+                
+                // Efeito visual de confirmação
+                document.querySelector('.glow-container').style.animation = 'glow 0.5s 3 alternate';
+                
+                // Atualiza a lista de produtos cadastrados
+                loadProductNames();
+                
+            } catch (error) {
+                showMessage(`✖ Falha ao atualizar: ${error.message}`, false);
+                console.error('Erro detalhado:', error);
+                
+                // Efeito visual de erro
+                const glow = document.querySelector('.glow-container');
+                glow.style.boxShadow = '0 0 20px rgba(255, 0, 106, 0.7)';
+                setTimeout(() => {
+                    glow.style.boxShadow = '';
+                }, 1000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Atualizar Produto</span>';
+            }
+        }
+
+        /**
+         * Atualiza um produto via PUT na API, buscando pelo nome.
+         */
+        async function updateProductByName() {
+            const btn = document.getElementById('updateByNameBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Atualizando... 🔄</span>';
+
+            try {
+                // Coletar dados do formulário
+                const nome = document.getElementById('nome').value.trim();
+                const product = {
+                    nome: nome,
+                    preco: parseFloat(document.getElementById('preco').value),
+                    disponivel: document.getElementById('disponivel').checked,
+                    categoria: {
+                        id: document.getElementById('categoria').value.trim() ? 
+                            parseInt(document.getElementById('categoria').value.trim()) : null
+                    }
+                };
+
+                // Validações
+                if (!product.nome || product.nome.length < 2) {
+                    throw new Error('Nome do produto deve ter pelo menos 2 caracteres');
+                }
+                if (isNaN(product.preco) || product.preco <= 0) {
+                    throw new Error('Preço deve ser um número positivo');
+                }
+
+                document.getElementById('jsonOutput').textContent = JSON.stringify(product, null, 2);
+
+                // PUT usando o nome na URL
+                const response = await fetch(`http://localhost:8080/api/produtos/nome/${encodeURIComponent(nome)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(product)
+                });
+
+                if (!response.ok) {
+                    let errorMessage = `Erro HTTP: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage += ` - ${errorData.message || JSON.stringify(errorData)}`;
+                    } catch (e) {
+                        errorMessage += ` - ${await response.text()}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+                showMessage('✔ Produto atualizado pelo nome com sucesso!', true);
+                console.log('Resposta da API:', data);
+
+                // Efeito visual de confirmação
+                document.querySelector('.glow-container').style.animation = 'glow 0.5s 3 alternate';
+
+            } catch (error) {
+                showMessage(`✖ Falha ao atualizar por nome: ${error.message}`, false);
+                console.error('Erro detalhado:', error);
+
+                // Efeito visual de erro
+                const glow = document.querySelector('.glow-container');
+                glow.style.boxShadow = '0 0 20px rgba(255, 0, 106, 0.7)';
+                setTimeout(() => {
+                    glow.style.boxShadow = '';
+                }, 1000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Atualizar por Nome</span>';
+            }
+        }
+
+        // ...existing code...
+
+/**
+ * Deleta um produto pelo nome.
+ */
+async function deleteProductByName() {
+    const btn = document.getElementById('deleteByNameBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span>Deletando... 🗑️</span>';
+
+    try {
+        const nome = document.getElementById('nome').value.trim();
+        if (!nome) throw new Error('Informe o nome do produto para deletar.');
+
+        if (!confirm(`Tem certeza que deseja excluir o produto "${nome}"?`)) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>Deletar por Nome</span>';
+            return;
+        }
+
+        const response = await fetch(`http://localhost:8080/api/produtos/${encodeURIComponent(nome)}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            let errorMessage = `Erro HTTP: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage += ` - ${errorData.message || JSON.stringify(errorData)}`;
+            } catch (e) {
+                errorMessage += ` - ${await response.text()}`;
+            }
+            throw new Error(errorMessage);
+        }
+
+        showMessage('✔ Produto deletado pelo nome com sucesso!', true);
+        document.getElementById('productForm').reset();
+        loadProductNames();
+
+        // Efeito visual de confirmação
+        document.querySelector('.glow-container').style.animation = 'glow 0.5s 3 alternate';
+
+    } catch (error) {
+        showMessage(`✖ Falha ao deletar por nome: ${error.message}`, false);
+        console.error('Erro detalhado:', error);
+
+        // Efeito visual de erro
+        const glow = document.querySelector('.glow-container');
+        glow.style.boxShadow = '0 0 20px rgba(255, 0, 106, 0.7)';
+        setTimeout(() => {
+            glow.style.boxShadow = '';
+        }, 1000);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Deletar por Nome</span>';
+    }
+}
+    </script>
+</body>
+</html>
